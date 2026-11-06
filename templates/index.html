@@ -1,0 +1,221 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>3-2-1 Password Maker</title>
+    <style>
+      body {
+             font-family: 'proxima-nova','Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+             margin: 0;
+             padding: 40px 20px;
+             background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+             color: #e0f2f1;
+             display: flex;
+             justify-content: center;
+             align-items: center;
+             min-height: 100vh;
+      }
+      .container {
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 700px;
+            width: 100%;
+            text-align: center;
+            box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        h1, h2, h3 { color: #80cbc4; margin-top: 0;}
+        hr { border: 0; border-top: 1px solid rgba(255,255,255,0.2); margin: 30px 0; }
+
+        .education-box {
+            background: rgba(0,0,0,0.2);
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            text-align: left;
+        }
+        .bad { color: #ff8a80; font-family: monospace; font-size: 1.1em;}
+        .good { color: #b9f6ca; font-family: monospace; font-size: 1.1em;}
+
+        textarea, input[type="text"] {
+            background: rgba(0, 0, 0, 0.2);
+            border: 1px solid #4db6ac;
+            color: white;
+            border-radius: 6px;
+            padding: 12px;
+            width: 90%;
+            margin-bottom: 15px;
+            font-size: 1em;
+        }
+        .game-inputs { display: flex; gap: 10px; justify-content: center; margin-bottom: 15px; }
+        .game-inputs input { width: 30%; margin-bottom: 0; }
+
+        button {
+            background-color: #00897b;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            font-size: 1.1em;
+            transition: background 0.3s;
+        }
+        button:hover { background-color: #00695c; }
+
+      .error { color: #ff8a80; font-weight: bold; }
+      .success { color: #b9f6ca; font-size: 1.4em; font-weight: bold; letter-spacing: 1px;}
+
+      .score-board { font-size: 1.2em; font-weight: bold; color: #4dd0e1; margin-top: 10px; }
+      .history-list { text-align: left; color: #b2dfdb; list-style-type: square;}
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>The (Password) Forge</h1>
+          <div class="education-box">
+            <h3>Why 3-2-1?</h3>
+            <p>Traditional random passwords are hard to remember and can be easy to guess, leading users to write them down or just being hacked. A 3-2-1 method relies on human entropy so it becomes much harder to guess but less difficult to remember</p>
+            <p>❌ <strong>Bad:</strong> <span class="bad">P@ssw0rd1</span> (Easily guessed, predictable substitutions)</p>
+            <p>✅ <strong>Good:</strong> <span class="good">GalaxyOrbitNebula88$</span> (Mathematically secure, highly memorable)</p>
+        </div>
+
+      <hr>
+
+      <h2>The Generator</h2>
+        <p>Enter your own word bank (min 3 words), and the backend will securely craft a unique passphrase.</p>
+        <textarea id="wordInput" rows="3" placeholder="e.g. Ocean, Mountain, River, Canyon..." aria-label="Custom Word Bank"></textarea><br>
+        <button onclick="runGenerator()">Forge Password</button>
+        <p id="gen-result" class="success"></p>
+        <p id="gen-error" class="error"></p>
+
+      <hr>
+
+      <h2>Memory Forge Challenge</h2>
+        <p>Create completely new 3-word combinations. If you repeat a word you've used in a previous round, you lose!</p>
+
+        <div class="game-inputs">
+            <input type="text" id="w1" placeholder="Word 1" aria-label="First Word">
+            <input type="text" id="w2" placeholder="Word 2" aria-label="Second Word">
+            <input type="text" id="w3" placeholder="Word 3" aria-label="Third Word">
+        </div>
+        <button onclick="handleGameAction()" id="game-btn">Submit Round</button>
+
+        <div class="score-board">Current Streak: <span id="score">0</span></div>
+        <p id="game-status" class="error"></p>
+
+        <ul id="game-history" class="history-list"></ul>
+    </div>
+
+    <script>
+        async function runGenerator() {
+            document.getElementById('gen-result').innerText = '';
+            document.getElementById('gen-error').innerText = '';
+            const words = document.getElementById('wordInput').value;
+
+            const res = await fetch('/api/generate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ words: words })
+            });
+            const data = await res.json();
+
+            if (res.ok) {
+                document.getElementById('gen-result').innerText = data.password;
+            } else {
+                document.getElementById('gen-error').innerText = data.error;
+            }
+        }
+
+        let gameHistory = [];
+        let streak = 0;
+        let isGameOver = false;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const inputs = ['w1', 'w2', 'w3'];
+            inputs.forEach(id => {
+                document.getElementById(id).addEventListener('keypress', function (e) {
+                    if (e.key === 'Enter') {
+                        e.preventDefault();
+                        handleGameAction();
+                    }
+                });
+            });
+        });
+
+        function handleGameAction() {
+            if (isGameOver) {
+                resetGame();
+            } else {
+                playRound();
+            }
+        }
+
+        async function playRound() {
+            const w1 = document.getElementById('w1').value;
+            const w2 = document.getElementById('w2').value;
+            const w3 = document.getElementById('w3').value;
+            const statusText = document.getElementById('game-status');
+
+            statusText.innerText = '';
+            statusText.className = '';
+
+            const res = await fetch('/api/game/validate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    new_words: [w1, w2, w3],
+                    history: gameHistory
+                })
+            });
+
+            const data = await res.json();
+            const gameBtn = document.getElementById('game-btn');
+
+            if (data.valid) {
+                gameHistory.push(...data.accepted_words);
+                streak++;
+                document.getElementById('score').innerText = streak;
+
+                const li = document.createElement('li');
+                li.innerHTML = `Round ${streak} Success: <span class="good">${data.passphrase}</span>`;
+                document.getElementById('game-history').appendChild(li);
+
+                document.getElementById('w1').value = '';
+                document.getElementById('w2').value = '';
+                document.getElementById('w3').value = '';
+                document.getElementById('w1').focus();
+            } else {
+
+            isGameOver = true;
+            statusText.innerText = data.error;
+            statusText.className = 'error';
+
+            gameBtn.innerText = "Game Over - Click to Restart";
+            gameBtn.style.backgroundColor = "#d32f2f";
+        }
+    }
+        function resetGame() {
+        gameHistory = [];
+        streak = 0;
+        isGameOver = false;
+
+        document.getElementById('score').innerText = '0';
+        document.getElementById('game-status').innerText = '';
+        document.getElementById('game-history').innerHTML = '';
+        document.getElementById('w1').value = '';
+        document.getElementById('w2').value = '';
+        document.getElementById('w3').value = '';
+
+        const gameBtn = document.getElementById('game-btn');
+        gameBtn.innerText = "Submit Round";
+        gameBtn.style.backgroundColor = "#00897b";
+
+        document.getElementById('w1').focus();
+    }
+    </script>
+</body>
+</html>
